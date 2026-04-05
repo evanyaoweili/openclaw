@@ -17,9 +17,12 @@ function createPlayerState() {
     timeLeft: 30,
     timer: null,
     gameActive: false,
-    level: 1
+    level: 1,
+    wins: 0,
+    misses: 0
   };
 }
+
 function getLevelSettings(level) {
   if (level === 1) {
     return { prizeCount: 3, timeLimit: 30, grabChance: 0.8 };
@@ -31,13 +34,20 @@ function getLevelSettings(level) {
 }
 io.on('connection', (socket) => {
   console.log('A user connected');
-
+  
   const state = createPlayerState();
 
   socket.emit('position', { x: state.clawX, y: state.clawY });
   socket.emit('prizes', state.prizes);
   socket.emit('level', state.level);
   socket.emit('timer', state.timeLeft);
+  socket.emit('score', { wins: state.wins, misses: state.misses });
+  socket.on('resetScore', () => {
+  state.wins = 0;
+  state.misses = 0;
+  socket.emit('score', { wins: state.wins, misses: state.misses });
+  socket.emit('result', 'Score reset!');
+  });
 });
 
 socket.on('start', () => {
@@ -80,8 +90,10 @@ socket.on('start', () => {
     if (state.timeLeft <= 0) {
       clearInterval(state.timer);
       state.gameActive = false;
+      state.misses++;
+      socket.emit('score', { wins: state.wins, misses: state.misses });
       socket.emit('result', 'Game Over!');
-    }
+    }  
   }, 1000);
 });
 socket.on('move', (direction) => {
@@ -120,6 +132,9 @@ socket.on('drop', () => {
         state.gameActive = false;
         clearInterval(state.timer);
 
+        state.wins++;
+        socket.emit('score', { wins: state.wins, misses: state.misses });
+
         if (state.level < 3) {
           state.level++;
           socket.emit('level', state.level);
@@ -133,9 +148,12 @@ socket.on('drop', () => {
     } else {
       socket.emit('result', 'Almost! Try again!');
     }
-  } else {
-    socket.emit('result', 'Missed!');
-  }
+} else {
+  state.misses++;
+  socket.emit('score', { wins: state.wins, misses: state.misses });
+  socket.emit('result', 'Missed!');
+}
+  
 });  
 
 socket.on('restart', () => {
@@ -146,6 +164,8 @@ socket.on('restart', () => {
   state.clawY = 0;
   state.collected = 0;
   state.timeLeft = 30;
+  state.wins = 0;
+  state.misses = 0;
 
   clearInterval(state.timer);
 
@@ -153,6 +173,7 @@ socket.on('restart', () => {
   socket.emit('position', { x: state.clawX, y: state.clawY });
   socket.emit('prizes', state.prizes);
   socket.emit('timer', state.timeLeft);
+  socket.emit('score', { wins: state.wins, misses: state.misses });
   socket.emit('result', 'Game reset!');
 });
 

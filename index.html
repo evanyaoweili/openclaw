@@ -116,6 +116,12 @@
       updatePrizeCount();
       drawGrid();
     });
+
+    socket.on('score', (score) => {
+      wins = score.wins;
+      misses = score.misses;
+      updateScore();
+    });
     function updateScore() {
        document.getElementById('score').innerText = `Wins: ${wins} | Misses: ${misses}`;
     }
@@ -179,13 +185,8 @@
     }
 
     function resetScore() {
-      wins = 0;
-      misses = 0;
-      updateScore();
-
-      document.getElementById('result').innerText = '';
-      document.getElementById('result').style.color = 'black';
-    }
+      socket.emit('resetScore');
+    }    
     function updateTimerDisplay(time) {
       const timerEl = document.getElementById('timer');
       timerEl.innerText = `Time: ${time}`;
@@ -239,11 +240,9 @@ socket.on('result', (msg) => {
     resultEl.style.color = 'green';
   } else if (msg === 'Level complete!') {
     resultEl.style.color = 'blue';
-    wins++;
     gameActive = false;
   } else if (msg === 'YOU BEAT THE GAME!') {
     resultEl.style.color = 'green';
-    wins++;
     gameActive = false;
   } else if (msg === 'Almost! Try again!') {
     resultEl.style.color = 'purple';
@@ -253,15 +252,22 @@ socket.on('result', (msg) => {
     resultEl.style.color = 'orange';
     gameActive = false;
   } else if (msg === 'Game reset!') {
-  resultEl.style.color = 'black';
-  gameActive = false;
+    resultEl.style.color = 'black';
+    gameActive = false;
+  } else if (msg === 'Score reset!') {
+    resultEl.style.color = 'black';
   } else {
     resultEl.style.color = 'black';
   }
-
   updateScore();
   updateButtons();
 });// 👇 PUT IT HERE (very bottom of script)
+
+socket.on('score', (score) => {
+  wins = score.wins;
+  misses = score.misses;
+  updateScore();
+});
 
 updateScore();
 updateButtons();
