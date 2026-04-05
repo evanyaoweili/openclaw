@@ -8,15 +8,18 @@ const io = new Server(server);
 
 app.use(express.static(__dirname));
 
-let clawX = 0;
-let clawY = 0;
-let prizes = [];
-let collected = 0;
-let timeLeft = 30;
-let timer;
-let gameActive = false;
-let level = 1;
-
+function createPlayerState() {
+  return {
+    clawX: 0,
+    clawY: 0,
+    prizes: [],
+    collected: 0,
+    timeLeft: 30,
+    timer: null,
+    gameActive: false,
+    level: 1
+  };
+}
 function getLevelSettings(level) {
   if (level === 1) {
     return { prizeCount: 3, timeLimit: 30, grabChance: 0.8 };
@@ -29,123 +32,133 @@ function getLevelSettings(level) {
 io.on('connection', (socket) => {
   console.log('A user connected');
 
-  socket.emit('position', { x: clawX, y: clawY });
-  socket.emit('prizes', prizes);
-  socket.emit('level', level); 
-socket.on('restart', () => {
-  level = 1;
-  gameActive = false;
-  prizes = [];
-  clawX = 0;
-  clawY = 0;
-  collected = 0;
-  timeLeft = 30;
+  const state = createPlayerState();
 
-  clearInterval(timer);
-
-  socket.emit('level', level);
-  socket.emit('position', { x: clawX, y: clawY });
-  socket.emit('prizes', prizes);
-  socket.emit('result', 'Game reset!');
+  socket.emit('position', { x: state.clawX, y: state.clawY });
+  socket.emit('prizes', state.prizes);
+  socket.emit('level', state.level);
+  socket.emit('timer', state.timeLeft);
 });
 
 socket.on('start', () => {
-  const settings = getLevelSettings(level);
+  const settings = getLevelSettings(state.level);
 
-  clawX = 0;
-  clawY = 0;
-  collected = 0;
-  timeLeft = settings.timeLimit;
-  gameActive = true;
+  state.clawX = 0;
+  state.clawY = 0;
+  state.collected = 0;
+  state.timeLeft = settings.timeLimit;
+  state.gameActive = true;
+  state.prizes = [];
 
-  prizes = [];
-
-  while (prizes.length < settings.prizeCount) {
+  while (state.prizes.length < settings.prizeCount) {
     const newPrize = {
       x: Math.floor(Math.random() * 5),
       y: Math.floor(Math.random() * 5)
     };
 
     const onClawStart = newPrize.x === 0 && newPrize.y === 0;
-    const alreadyExists = prizes.some(p => p.x === newPrize.x && p.y === newPrize.y);
+    const alreadyExists = state.prizes.some(
+      p => p.x === newPrize.x && p.y === newPrize.y
+    );
 
     if (!onClawStart && !alreadyExists) {
-      prizes.push(newPrize);
+      state.prizes.push(newPrize);
     }
   }
 
-  socket.emit('position', { x: clawX, y: clawY });
-  socket.emit('prizes', prizes);
-  socket.emit('level', level);
+  socket.emit('position', { x: state.clawX, y: state.clawY });
+  socket.emit('prizes', state.prizes);
+  socket.emit('level', state.level);
+  socket.emit('timer', state.timeLeft);
   socket.emit('result', '');
 
-  clearInterval(timer);
-  timer = setInterval(() => {
-    timeLeft--;
-    io.emit('timer', timeLeft);
+  clearInterval(state.timer);
+  state.timer = setInterval(() => {
+    state.timeLeft--;
+    socket.emit('timer', state.timeLeft);
 
-    if (timeLeft <= 0) {
-      clearInterval(timer);
-      gameActive = false;
-      io.emit('result', 'Game Over!');
+    if (state.timeLeft <= 0) {
+      clearInterval(state.timer);
+      state.gameActive = false;
+      socket.emit('result', 'Game Over!');
     }
   }, 1000);
 });
+socket.on('move', (direction) => {
+  if (!state.gameActive) return;
 
-  socket.on('move', (direction) => {
-    if (!gameActive) return;
+  if (direction === 'left' && state.clawX > 0) state.clawX--;
+  if (direction === 'right' && state.clawX < 4) state.clawX++;
+  if (direction === 'forward' && state.clawY > 0) state.clawY--;
+  if (direction === 'back' && state.clawY < 4) state.clawY++;
 
-    if (direction === 'left' && clawX > 0) clawX--;
-    if (direction === 'right' && clawX < 4) clawX++;
-    if (direction === 'forward' && clawY > 0) clawY--;
-    if (direction === 'back' && clawY < 4) clawY++;
-
-    io.emit('position', { x: clawX, y: clawY });
-  });
+  socket.emit('position', { x: state.clawX, y: state.clawY });
+});
 
 socket.on('drop', () => {
-  if (!gameActive) return;
+  if (!state.gameActive) return;
 
-  const hitIndex = prizes.findIndex(p => p.x === clawX && p.y === clawY);
+  const hitIndex = state.prizes.findIndex(
+    p => p.x === state.clawX && p.y === state.clawY
+  );
 
   if (hitIndex !== -1) {
-    const settings = getLevelSettings(level);
+    const settings = getLevelSettings(state.level);
     const success = Math.random() < settings.grabChance;
 
     if (success) {
-      prizes.splice(hitIndex, 1);
-      collected++;
+      state.prizes.splice(hitIndex, 1);
+      state.collected++;
 
-      clawX = 0;
-      clawY = 0;
+      state.clawX = 0;
+      state.clawY = 0;
 
-      io.emit('position', { x: clawX, y: clawY });
-      io.emit('prizes', prizes);
+      socket.emit('position', { x: state.clawX, y: state.clawY });
+      socket.emit('prizes', state.prizes);
 
-      if (prizes.length === 0) {
-        gameActive = false;
-        clearInterval(timer);
+      if (state.prizes.length === 0) {
+        state.gameActive = false;
+        clearInterval(state.timer);
 
-        if (level < 3) {
-          level++;
-          io.emit('level', level);
-          io.emit('result', 'Level complete!');
+        if (state.level < 3) {
+          state.level++;
+          socket.emit('level', state.level);
+          socket.emit('result', 'Level complete!');
         } else {
-          io.emit('result', 'YOU BEAT THE GAME!');
+          socket.emit('result', 'YOU BEAT THE GAME!');
         }
       } else {
-        io.emit('result', 'Prize collected!');
+        socket.emit('result', 'Prize collected!');
       }
     } else {
-      io.emit('result', 'Almost! Try again!');
+      socket.emit('result', 'Almost! Try again!');
     }
   } else {
-    io.emit('result', 'Missed!');
+    socket.emit('result', 'Missed!');
   }
+});  
+
+socket.on('restart', () => {
+  state.level = 1;
+  state.gameActive = false;
+  state.prizes = [];
+  state.clawX = 0;
+  state.clawY = 0;
+  state.collected = 0;
+  state.timeLeft = 30;
+
+  clearInterval(state.timer);
+
+  socket.emit('level', state.level);
+  socket.emit('position', { x: state.clawX, y: state.clawY });
+  socket.emit('prizes', state.prizes);
+  socket.emit('timer', state.timeLeft);
+  socket.emit('result', 'Game reset!');
 });
-  socket.on('disconnect', () => {
-    console.log('User disconnected');
-  });
+
+socket.on('disconnect', () => {
+  clearInterval(state.timer);
+  console.log('User disconnected');
 });
 
 const PORT = process.env.PORT || 3000;
