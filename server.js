@@ -93,8 +93,8 @@ socket.on('start', () => {
       state.misses++;
       socket.emit('score', { wins: state.wins, misses: state.misses });
       socket.emit('result', 'Game Over!');
-    }  
-  }, 1000);
+      }  
+    }, 1000);
 });
 socket.on('move', (direction) => {
   if (!state.gameActive) return;
@@ -146,14 +146,16 @@ socket.on('drop', () => {
         socket.emit('result', 'Prize collected!');
       }
     } else {
+      state.misses++;
+      socket.emit('score', { wins: state.wins, misses: state.misses });
       socket.emit('result', 'Almost! Try again!');
     }
-} else {
-  state.misses++;
-  socket.emit('score', { wins: state.wins, misses: state.misses });
-  socket.emit('result', 'Missed!');
-}
-  
+  } else {
+    state.misses++;
+    console.log('misses =', state.misses);
+    socket.emit('score', { wins: state.wins, misses: state.misses });
+    socket.emit('result', 'Missed!');
+  }
 });  
 
 socket.on('restart', () => {
