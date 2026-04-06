@@ -83,7 +83,7 @@
   </div>
   <div id="level">Level: 1</div>
   <div id="playerInfo">You are Player ?</div>
-  <div id="scoreboard"></div>
+  <div id="scoreboard" style="margin-top:10px; font-size:18px; font-weight:bold;"></div>
   
 <button id="startBtn" onclick="startGame()">START</button>
 <button id="resetBtn" onclick="resetScore()">Reset Score</button>
@@ -200,7 +200,7 @@
 function updateScoreboard() {
   const scoreboardEl = document.getElementById('scoreboard');
 
-  if (scoreboard.length === 0) {
+  if (!scoreboard || scoreboard.length === 0) {
     scoreboardEl.innerText = 'No players connected';
     return;
   }
@@ -211,7 +211,7 @@ function updateScoreboard() {
         `Player ${player.playerNumber}: Wins ${player.wins} | Misses ${player.misses}`
     )
     .join('<br>');
-}  
+  }
 
   document.addEventListener('keydown', (event) => {
       if (!gameActive) return;
@@ -276,7 +276,7 @@ socket.on('playerInfo', (info) => {
 });
 
 socket.on('scoreboard', (scores) => {
-  console.log('scoreboard update:', scores);
+  console.log('scoreboard received:', scores); // 👈 ADD THIS
   scoreboard = scores;
   updateScoreboard();
 });

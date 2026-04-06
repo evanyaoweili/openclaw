@@ -52,6 +52,7 @@ function sendScores() {
     misses: player.misses
   }));
 
+  console.log('sending scoreboard:', scoreData);
   io.emit('scoreboard', scoreData);
 }
 
