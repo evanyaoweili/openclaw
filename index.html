@@ -75,7 +75,6 @@
   <h1>OpenClaw</h1>
 
   <h2 id="timer">Time: 0</h2>
-  <div id="score">Wins: 0 | Misses: 0</div>
   <div id="position">X: 0, Y: 0</div>
   <div id="result"></div>
   <div id="prizeCount">Prizes left: 0</div>
@@ -270,11 +269,6 @@ socket.on('result', (msg) => {
 
   updateButtons();
 });
-socket.on('score', (score) => {
-  wins = score.wins;
-  misses = score.misses;
-  updateScore();
-});
 
 socket.on('playerInfo', (info) => {
   playerNumber = info.playerNumber;
@@ -282,11 +276,11 @@ socket.on('playerInfo', (info) => {
 });
 
 socket.on('scoreboard', (scores) => {
+  console.log('scoreboard update:', scores);
   scoreboard = scores;
   updateScoreboard();
 });
 
-updateScore();
 updateButtons();
 updatePrizeCount();
 updateLevelDisplay();
