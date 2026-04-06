@@ -83,6 +83,8 @@
     Use arrow keys to move and Space to drop.
   </div>
   <div id="level">Level: 1</div>
+  <div id="playerInfo">You are Player ?</div>
+  <div id="scoreboard"></div>
   
 <button id="startBtn" onclick="startGame()">START</button>
 <button id="resetBtn" onclick="resetScore()">Reset Score</button>
@@ -106,10 +108,10 @@
     const gridSize = 5;
     let claw = { x: 0, y: 0 };
     let prizes = [];
-    let wins = 0;
-    let misses = 0;
     let gameActive = false;
     let level = 1;
+    let playerNumber = null;
+    let scoreboard = [];
 
     socket.on('prizes', (newPrizes) => {
       prizes = newPrizes;
@@ -117,14 +119,6 @@
       drawGrid();
     });
 
-    socket.on('score', (score) => {
-      wins = score.wins;
-      misses = score.misses;
-      updateScore();
-    });
-    function updateScore() {
-       document.getElementById('score').innerText = `Wins: ${wins} | Misses: ${misses}`;
-    }
     function updatePrizeCount() {
       document.getElementById('prizeCount').innerText = `Prizes left: ${prizes.length}`;
     }
@@ -198,7 +192,27 @@
       } else {
         timerEl.style.color = 'black';
       }
-    }    
+    }  
+    function updatePlayerInfo() {
+  document.getElementById('playerInfo').innerText =
+    playerNumber ? `You are Player ${playerNumber}` : 'You are not assigned yet';
+}
+
+function updateScoreboard() {
+  const scoreboardEl = document.getElementById('scoreboard');
+
+  if (scoreboard.length === 0) {
+    scoreboardEl.innerText = 'No players connected';
+    return;
+  }
+
+  scoreboardEl.innerHTML = scoreboard
+    .map(
+      (player) =>
+        `Player ${player.playerNumber}: Wins ${player.wins} | Misses ${player.misses}`
+    )
+    .join('<br>');
+}  
 
   document.addEventListener('keydown', (event) => {
       if (!gameActive) return;
@@ -232,21 +246,17 @@
     });
 
 socket.on('result', (msg) => {
-  console.log('result message:', msg);
   const resultEl = document.getElementById('result');
   resultEl.innerText = msg;
 
-  if (msg === 'Prize collected!') {
+  if (msg.includes('collected') || msg.includes('completed') || msg.includes('beat')) {
     resultEl.style.color = 'green';
-  } else if (msg === 'Level complete!') {
-    resultEl.style.color = 'blue';
-    gameActive = false;
-  } else if (msg === 'YOU BEAT THE GAME!') {
-    resultEl.style.color = 'green';
-    gameActive = false;
-  } else if (msg === 'Almost! Try again!') {
+    if (msg.includes('completed') || msg.includes('beat') || msg === 'Game reset!' || msg === '') {
+      gameActive = false;
+    }
+  } else if (msg.includes('almost')) {
     resultEl.style.color = 'purple';
-  } else if (msg === 'Missed!') {
+  } else if (msg.includes('missed')) {
     resultEl.style.color = 'red';
   } else if (msg === 'Game Over!') {
     resultEl.style.color = 'orange';
@@ -254,19 +264,26 @@ socket.on('result', (msg) => {
   } else if (msg === 'Game reset!') {
     resultEl.style.color = 'black';
     gameActive = false;
-  } else if (msg === 'Score reset!') {
-    resultEl.style.color = 'black';
   } else {
     resultEl.style.color = 'black';
   }
-  updateScore();
-  updateButtons();
-});// 👇 PUT IT HERE (very bottom of script)
 
+  updateButtons();
+});
 socket.on('score', (score) => {
   wins = score.wins;
   misses = score.misses;
   updateScore();
+});
+
+socket.on('playerInfo', (info) => {
+  playerNumber = info.playerNumber;
+  updatePlayerInfo();
+});
+
+socket.on('scoreboard', (scores) => {
+  scoreboard = scores;
+  updateScoreboard();
 });
 
 updateScore();
