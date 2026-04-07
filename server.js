@@ -31,7 +31,19 @@ const gameState = {
 
 const players = {};
 
-getPlayerNumber
+function getPlayerNumber() {
+  const takenNumbers = Object.values(players).map(player => player.playerNumber);
+
+  if (!takenNumbers.includes(1)) return 1;
+  if (!takenNumbers.includes(2)) return 2;
+
+  let num = 3;
+  while (takenNumbers.includes(num)) {
+    num++;
+  }
+  return num;
+}
+
 function sendGameState() {
   io.emit('position', { x: gameState.clawX, y: gameState.clawY });
   io.emit('prizes', gameState.prizes);
