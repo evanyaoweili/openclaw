@@ -1,3 +1,6 @@
+let players = [];
+let currentTurnIndex = 0;
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -5,6 +8,7 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
 
 app.use(express.static(__dirname));
 
@@ -29,7 +33,7 @@ const gameState = {
   level: 1
 };
 
-const players = {};
+//const players = {};
 
 function getPlayerNumber() {
   const takenNumbers = Object.values(players).map(player => player.playerNumber);
@@ -83,7 +87,15 @@ function generatePrizes(prizeCount) {
 }
 
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+    players.push(socket.id);
+
+    console.log("Player joined:", socket.id);
+
+    socket.emit('playerNumber', players.length);
+
+    io.emit('turnUpdate', {
+      currentPlayer: players[currentTurnIndex]
+    });
 
   players[socket.id] = {
     socketId: socket.id,
@@ -128,6 +140,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('move', (direction) => {
+      if (socket.id !== players[currentTurnIndex]) {
+      return; // ❌ Not your turn
+    }  
     if (!gameState.gameActive) return;
 
     if (direction === 'left' && gameState.clawX > 0) gameState.clawX--;
@@ -139,7 +154,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('drop', () => {
-    if (!gameState.gameActive) return;
+  if (socket.id !== players[currentTurnIndex]) {
+    return; // ❌ Not your turn
+  }
+
+      if (!gameState.gameActive) return;
 
     const player = players[socket.id];
     if (!player) return;
@@ -189,8 +208,37 @@ io.on('connection', (socket) => {
       sendScores();
       io.emit('result', `Player ${player.playerNumber} missed!`);
     }
+    nextTurn(); // move to next player
   });
 
+let turnTimer = null;
+
+function nextTurn() {
+  if (players.length === 0) return;
+
+  // move to next player
+  currentTurnIndex = (currentTurnIndex + 1) % players.length;
+
+  const currentPlayer = players[currentTurnIndex];
+
+  // tell everyone whose turn it is
+  io.emit('turnUpdate', {
+    currentPlayer: currentPlayer
+  });
+
+  console.log("Current turn:", currentPlayer);
+
+  // 🧠 CLEAR previous timer (IMPORTANT)
+  if (turnTimer) {
+    clearTimeout(turnTimer);
+  }
+
+  // ⏱️ start new timer
+  turnTimer = setTimeout(() => {
+    console.log("Turn timed out");
+    nextTurn();
+  }, 20000); // 20 seconds
+}
   socket.on('restart', () => {
     gameState.level = 1;
     gameState.gameActive = false;
@@ -223,9 +271,15 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    delete players[socket.id];
-    sendScores();
+    players = players.filter(id => id !== socket.id);
+
+    if (currentTurnIndex >= players.length) {
+      currentTurnIndex = 0;
+    }
+
+    io.emit('turnUpdate', {
+      currentPlayer: players[currentTurnIndex]
+    });
   });
 });
 
@@ -234,3 +288,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// server.listen(3000, () => {
+//   console.log('Server running on http://localhost:3000');
+// });

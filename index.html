@@ -78,6 +78,7 @@
   <div id="position">X: 0, Y: 0</div>
   <div id="result"></div>
   <div id="prizeCount">Prizes left: 0</div>
+  <div id="turn"></div>
   <div id="instructions">
     Use arrow keys to move and Space to drop.
   </div>
@@ -170,10 +171,12 @@
       socket.emit('restart');
     }
     function move(direction) {
+      if (!isMyTurn()) return;
       socket.emit('move', direction);
     }
 
     function drop() {
+      if (!isMyTurn()) return;
       socket.emit('drop');
     }
 
@@ -269,6 +272,20 @@ socket.on('result', (msg) => {
   updateButtons();
 });
 
+function isMyTurn(currentPlayer) {
+  return socket.id === currentPlayer;
+}
+
+socket.on('turnUpdate', (data) => {
+  const myId = socket.id;
+
+  if (data.currentPlayer === myId) {
+    document.getElementById('turn').innerText = "Your Turn!";
+  } else {
+    document.getElementById('turn').innerText = "Waiting...";
+  }
+});
+
 socket.on('playerInfo', (info) => {
   console.log('playerInfo received:', info);
   playerNumber = info.playerNumber;
@@ -280,6 +297,8 @@ socket.on('scoreboard', (scores) => {
   scoreboard = scores;
   updateScoreboard();
 });
+
+
 
 updateButtons();
 updatePrizeCount();
