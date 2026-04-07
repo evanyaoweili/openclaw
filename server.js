@@ -31,13 +31,7 @@ const gameState = {
 
 const players = {};
 
-function getPlayerNumber() {
-  const ids = Object.keys(players);
-  if (ids.length === 0) return 1;
-  if (ids.length === 1) return 2;
-  return ids.length + 1;
-}
-
+getPlayerNumber
 function sendGameState() {
   io.emit('position', { x: gameState.clawX, y: gameState.clawY });
   io.emit('prizes', gameState.prizes);
