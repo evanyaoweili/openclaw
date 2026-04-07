@@ -192,7 +192,7 @@
         timerEl.style.color = 'black';
       }
     }  
-    function updatePlayerInfo() {
+function updatePlayerInfo() {
   document.getElementById('playerInfo').innerText =
     playerNumber ? `You are Player ${playerNumber}` : 'You are not assigned yet';
 }
@@ -211,8 +211,7 @@ function updateScoreboard() {
         `Player ${player.playerNumber}: Wins ${player.wins} | Misses ${player.misses}`
     )
     .join('<br>');
-  }
-
+}
   document.addEventListener('keydown', (event) => {
       if (!gameActive) return;
 
@@ -271,6 +270,7 @@ socket.on('result', (msg) => {
 });
 
 socket.on('playerInfo', (info) => {
+  console.log('playerInfo received:', info);
   playerNumber = info.playerNumber;
   updatePlayerInfo();
 });
