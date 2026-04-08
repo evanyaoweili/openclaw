@@ -91,9 +91,8 @@ io.on('connection', (socket) => {
    
 
     console.log("Player joined:", socket.id);
-
-    socket.emit('playerNumber', playerOrder.length);
-
+    playerOrder.push(socket.id);
+    
     io.emit('turnUpdate', {
       currentPlayer: playerOrder[currentTurnIndex]
     });
@@ -121,6 +120,16 @@ io.on('connection', (socket) => {
     gameState.timeLeft = settings.timeLimit;
     gameState.gameActive = true;
 
+    // start turn system when game starts
+    if (playerOrder.length > 0) {
+      currentTurnIndex = 0;
+
+      io.emit('turnUpdate', {
+        currentPlayer: playerOrder[currentTurnIndex]
+      });
+
+      console.log("Game started - first turn:", playerOrder[currentTurnIndex]);
+    }
     generatePrizes(settings.prizeCount);
 
     clearInterval(gameState.timer);
@@ -141,8 +150,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('move', (direction) => {
-      if (socket.id !== playerOrder[currentTurnIndex]) {
-      return; // ❌ Not your turn
+    console.log("MOVE CHECK:", {
+      socketId: socket.id,
+      expected: playerOrder[currentTurnIndex],
+      gameActive: gameState.gameActive
+    });
+    if (socket.id !== playerOrder[currentTurnIndex]) {
+    return; // ❌ Not your turn
     }  
     if (!gameState.gameActive) return;
 
@@ -262,28 +276,36 @@ function nextTurn() {
     io.emit('result', 'Game reset!');
   });
 
-  socket.on('resetScore', () => {
-    const player = players[socket.id];
-    if (!player) return;
+ io.on('connection', (socket) => {
+  console.log("Player joined:", socket.id);
 
-    player.wins = 0;
-    player.misses = 0;
-    sendScores();
-    socket.emit('result', `Player ${player.playerNumber} score reset!`);
-  });
-
-  socket.on('disconnect', () => {
-    playerOrder = playerOrder.filter(id => id !== socket.id);
-    delete players[socket.id];
-
-    if (currentTurnIndex >= playerOrder.length) {
-      currentTurnIndex = 0;
-    }
+  players[socket.id] = {
+    socketId: socket.id,
+    playerNumber: getPlayerNumber(),
+    wins: 0,
+    misses: 0
+  };
+  if (playerOrder.length === 1) {
+    currentTurnIndex = 0;
 
     io.emit('turnUpdate', {
       currentPlayer: playerOrder[currentTurnIndex]
     });
+
+  console.log("Initial turn:", playerOrder[currentTurnIndex]);
+}
+  playerOrder.push(socket.id);
+
+  socket.emit('playerInfo', {
+    playerNumber: players[socket.id].playerNumber
   });
+
+  io.emit('turnUpdate', {
+    currentPlayer: playerOrder[currentTurnIndex]
+  });
+
+  sendGameState();
+  sendScores();
 });
 
 const PORT = process.env.PORT || 3000;
