@@ -291,41 +291,6 @@ function nextTurn() {
     nextTurn();
   }, 20000); // 20 seconds
 }
-  socket.on('restart', () => {
-    gameState.level = 1;
-    gameState.gameActive = false;
-    gameState.prizes = [];
-    gameState.clawX = 0;
-    gameState.clawY = 0;
-    gameState.collected = 0;
-    gameState.timeLeft = 30;
-
-    clearInterval(gameState.timer);
-
-    Object.values(players).forEach((player) => {
-      player.wins = 0;
-      player.misses = 0;
-    });
-
-    sendGameState();
-    sendScores();
-    io.emit('result', 'Game reset!');
-  });
-
-  console.log("Initial turn:", playerOrder[currentTurnIndex]);
-  playerOrder.push(socket.id);
-
-  socket.emit('playerInfo', {
-    playerNumber: players[socket.id].playerNumber
-  });
-
-  io.emit('turnUpdate', {
-    currentPlayer: playerOrder[currentTurnIndex]
-  });
-
-  sendGameState();
-  sendScores();
-});
 
 const PORT = process.env.PORT || 3000;
 

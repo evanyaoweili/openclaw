@@ -3,11 +3,10 @@
 <head>
   <title>OpenClaw Game</title>
   <style>
-    body {
+  body {
+      font-size: 20px; /* 👈 increase this (try 18–24) */
       font-family: Arial, sans-serif;
-      text-align: center;
     }
-
     #grid {
       display: grid;
       grid-template-columns: repeat(5, 60px);
@@ -69,22 +68,43 @@
   #timer {
     font-weight: bold;
   }
+    #gameInfo {
+    margin-bottom: 20px;
+  }
+
+  #turn {
+    color: blue;
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+  #scoreboard {
+    margin-top: 10px;
+    font-size: 18px;
+  }
   </style>
 </head>
 <body>
   <h1>OpenClaw</h1>
 
-  <h2 id="timer">Time: 0</h2>
-  <div id="position">X: 0, Y: 0</div>
-  <div id="result"></div>
-  <div id="prizeCount">Prizes left: 0</div>
-  <div id="turn"></div>
-  <div id="instructions">
-    Use arrow keys to move and Space to drop.
-  </div>
-  <div id="level">Level: 1</div>
-  <div id="playerInfo">You are Player ?</div>
-  <div id="scoreboard" style="margin-top:10px; font-size:18px; font-weight:bold;"></div>
+ <div id="gameInfo">
+  <h1>OpenClaw</h1>
+
+  <div>Time: <span id="timer">30</span></div>
+  <div>Position: X: <span id="x">0</span>, Y: <span id="y">0</span></div>
+  <div>Prizes left: <span id="prizes">0</span></div>
+  <div>Level: <span id="level">1</span></div>
+
+  <h2 id="turn">Waiting...</h2>
+
+  <div>You are Player <span id="playerNumber"></span></div>
+
+  <p>Use arrow keys to move and Space to drop.</p>
+</div>
+
+<hr>
+
+<div id="scoreboard"></div>
   
 <button id="startBtn" onclick="startGame()">START</button>
 <button id="resetBtn" onclick="resetScore()">Reset Score</button>
@@ -98,219 +118,210 @@
 
 <br><br>
 <button id="dropBtn" onclick="drop()">DROP</button>
-
   <div id="grid"></div>
+  <div id="result"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
+  const gridSize = 5;
+  let claw = { x: 0, y: 0 };
+  let prizes = [];
+  let gameActive = false;
+  let level = 1;
+  let playerNumber = null;
+  let currentPlayerId = null;
 
-    const gridSize = 5;
-    let claw = { x: 0, y: 0 };
-    let prizes = [];
-    let gameActive = false;
-    let level = 1;
-    let playerNumber = null;
-    let scoreboard = [];
-    let currentPlayerId = null;    
+  function updatePrizeCount() {
+    document.getElementById('prizes').innerText = prizes.length;
+  }
 
-    socket.on('prizes', (newPrizes) => {
-      prizes = newPrizes;
-      updatePrizeCount();
-      drawGrid();
-    });
+  function updateButtons() {
+    document.getElementById('startBtn').disabled = gameActive;
+    document.getElementById('leftBtn').disabled = !gameActive;
+    document.getElementById('rightBtn').disabled = !gameActive;
+    document.getElementById('forwardBtn').disabled = !gameActive;
+    document.getElementById('backBtn').disabled = !gameActive;
+    document.getElementById('dropBtn').disabled = !gameActive;
+    document.getElementById('restartBtn').disabled = gameActive;
+    document.getElementById('resetBtn').disabled = gameActive;
+  }
 
-    function updatePrizeCount() {
-      document.getElementById('prizeCount').innerText = `Prizes left: ${prizes.length}`;
+  function updateLevelDisplay() {
+    document.getElementById('level').innerText = level;
+  }
+
+  function updatePlayerInfo() {
+    document.getElementById('playerNumber').innerText = playerNumber || '';
+  }
+
+  function updateTimerDisplay(time) {
+    const timerEl = document.getElementById('timer');
+    timerEl.innerText = time;
+
+    if (time <= 5) {
+      timerEl.style.color = 'red';
+    } else if (time <= 10) {
+      timerEl.style.color = 'orange';
+    } else {
+      timerEl.style.color = 'black';
     }
-    function updateButtons() {
-      document.getElementById('startBtn').disabled = gameActive;
-      document.getElementById('leftBtn').disabled = !gameActive;
-      document.getElementById('rightBtn').disabled = !gameActive;
-      document.getElementById('forwardBtn').disabled = !gameActive;
-      document.getElementById('backBtn').disabled = !gameActive;
-      document.getElementById('dropBtn').disabled = !gameActive;
-      document.getElementById('restartBtn').disabled = gameActive;
-      document.getElementById('resetBtn').disabled = gameActive;
-    }
-    function updateLevelDisplay() {
-      document.getElementById('level').innerText = `Level: ${level}`;
-    }
-    function drawGrid() {
-      const grid = document.getElementById('grid');
-      grid.innerHTML = '';
+  }
 
-      for (let y = 0; y < gridSize; y++) {
-        for (let x = 0; x < gridSize; x++) {
-          const cell = document.createElement('div');
-          cell.className = 'cell';
+  function drawGrid() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
 
-          const hasPrize = prizes.some(p => p.x === x && p.y === y);
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
 
-          if (x === claw.x && y === claw.y) {
-            cell.innerText = '🕹️';
-            cell.classList.add('claw-cell');
-          } else if (hasPrize) {
-            cell.innerText = '🎁';
-            cell.classList.add('prize-cell');
-          } else {
-            cell.innerText = '';
-            cell.classList.add('empty-cell');
-          }
+        const hasPrize = prizes.some(p => p.x === x && p.y === y);
 
-          grid.appendChild(cell);
+        if (x === claw.x && y === claw.y) {
+          cell.innerText = '🕹️';
+          cell.classList.add('claw-cell');
+        } else if (hasPrize) {
+          cell.innerText = '🎁';
+          cell.classList.add('prize-cell');
+        } else {
+          cell.innerText = '';
+          cell.classList.add('empty-cell');
         }
+
+        grid.appendChild(cell);
       }
     }
-    function startGame() {
-      gameActive = true;
-      updateButtons();
-      updateTimerDisplay(30);
-      socket.emit('start');
-    }
-    function restartGame() {
-      socket.emit('restart');
-    }
-    function move(direction) {
-      if (!isMyTurn()) return;
-      socket.emit('move', direction);
-    }
-
-    function drop() {
-      if (!isMyTurn()) return;
-      socket.emit('drop');
-    }
-
-    function resetScore() {
-      socket.emit('resetScore');
-    }    
-    function updateTimerDisplay(time) {
-      const timerEl = document.getElementById('timer');
-      timerEl.innerText = `Time: ${time}`;
-
-      if (time <= 5) {
-        timerEl.style.color = 'red';
-      } else if (time <= 10) {
-        timerEl.style.color = 'orange';
-      } else {
-        timerEl.style.color = 'black';
-      }
-    }  
-function updatePlayerInfo() {
-  document.getElementById('playerInfo').innerText =
-    playerNumber ? `You are Player ${playerNumber}` : 'You are not assigned yet';
-}
-
-function updateScoreboard() {
-  const scoreboardEl = document.getElementById('scoreboard');
-
-  if (!scoreboard || scoreboard.length === 0) {
-    scoreboardEl.innerText = 'No players connected';
-    return;
   }
 
-  scoreboardEl.innerHTML = scoreboard
-      .filter(player =>
-        player &&
-        player.playerNumber !== undefined &&
-        player.wins !== undefined &&
-        player.misses !== undefined
-      )
-      .map(player =>
-        `Player ${player.playerNumber}: Wins ${player.wins} | Misses ${player.misses}`
-      )
-      .join('<br>');
+  function startGame() {
+    gameActive = true;
+    updateButtons();
+    updateTimerDisplay(30);
+    socket.emit('start');
   }
+
+  function restartGame() {
+    socket.emit('restart');
+  }
+
+  function isMyTurn() {
+    console.log("My ID:", socket.id);
+    console.log("Current Turn:", currentPlayerId);
+    return socket.id === currentPlayerId;
+  }
+  function move(direction) {
+    if (!gameActive) return;
+    //if (!isMyTurn()) return;
+    socket.emit('move', direction);
+  }
+
+  function drop() {
+    if (!gameActive) return;
+    //if (!isMyTurn()) return;
+    socket.emit('drop');
+  }
+
+  function resetScore() {
+    socket.emit('resetScore');
+  }
+
   document.addEventListener('keydown', (event) => {
-      if (!gameActive) return;
+    if (!gameActive) return;
+    if (!isMyTurn()) return;
 
-      if (event.key === 'ArrowLeft') {
-        move('left');
-      } else if (event.key === 'ArrowRight') {
-        move('right');
-      } else if (event.key === 'ArrowUp') {
-        move('forward');
-      } else if (event.key === 'ArrowDown') {
-        move('back');
-      } else if (event.key === ' ') {
-        event.preventDefault();
-        drop();
-      }
-    });
-
-    socket.on('level', (newLevel) => {
-      level = newLevel;
-      updateLevelDisplay();
-    });
-    socket.on('timer', (time) => {
-      updateTimerDisplay(time);
-    });
-
-    socket.on('position', (pos) => {
-      claw = pos;
-      document.getElementById('position').innerText = `X: ${pos.x}, Y: ${pos.y}`;
-      drawGrid();
-    });
-
-socket.on('result', (msg) => {
-  const resultEl = document.getElementById('result');
-  resultEl.innerText = msg;
-
-  if (msg.includes('collected') || msg.includes('completed') || msg.includes('beat')) {
-    resultEl.style.color = 'green';
-    if (msg.includes('completed') || msg.includes('beat') || msg === 'Game reset!' || msg === '') {
-      gameActive = false;
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      move('left');
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      move('right');
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      move('forward');
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      move('back');
+    } else if (event.code === 'Space') {
+      event.preventDefault();
+      drop();
     }
-  } else if (msg.includes('almost')) {
-    resultEl.style.color = 'purple';
-  } else if (msg.includes('missed')) {
-    resultEl.style.color = 'red';
-  } else if (msg === 'Game Over!') {
-    resultEl.style.color = 'orange';
-    gameActive = false;
-  } else if (msg === 'Game reset!') {
-    resultEl.style.color = 'black';
-    gameActive = false;
-  } else {
-    resultEl.style.color = 'black';
-  }
+  });
+
+  socket.on('prizes', (newPrizes) => {
+    prizes = newPrizes;
+    updatePrizeCount();
+    drawGrid();
+  });
+
+  socket.on('level', (newLevel) => {
+    level = newLevel;
+    updateLevelDisplay();
+  });
+
+  socket.on('timer', (time) => {
+    updateTimerDisplay(time);
+  });
+
+  socket.on('position', (pos) => {
+    claw = pos;
+    document.getElementById('x').innerText = pos.x;
+    document.getElementById('y').innerText = pos.y;
+    drawGrid();
+  });
+
+  socket.on('result', (msg) => {
+    const resultEl = document.getElementById('result');
+    resultEl.innerText = msg || '';
+
+    if (msg.includes('collected') || msg.includes('completed') || msg.includes('beat')) {
+      resultEl.style.color = 'green';
+      if (msg.includes('completed') || msg.includes('beat')) {
+        gameActive = false;
+      }
+    } else if (msg.includes('almost')) {
+      resultEl.style.color = 'purple';
+    } else if (msg.includes('missed')) {
+      resultEl.style.color = 'red';
+    } else if (msg === 'Game Over!') {
+      resultEl.style.color = 'orange';
+      gameActive = false;
+    } else if (msg === 'Game reset!') {
+      resultEl.style.color = 'black';
+      gameActive = false;
+    } else {
+      resultEl.style.color = 'black';
+    }
+
+    updateButtons();
+  });
+
+  socket.on('turnUpdate', (data) => {
+    currentPlayerId = data.currentPlayer;
+
+    document.getElementById('turn').innerText =
+      data.currentPlayer === socket.id ? 'Your Turn!' : 'Waiting...';
+  });
+
+  socket.on('playerInfo', (info) => {
+    playerNumber = info.playerNumber;
+    updatePlayerInfo();
+  });
+
+  socket.on('scoreboard', (data) => {
+    let html = "<h3>Scoreboard</h3>";
+    data.slice(0, 5).forEach(player => {
+      html += `<div>Player ${player.playerNumber}: Wins ${player.wins} | Misses ${player.misses}</div>`;
+    });
+    document.getElementById('scoreboard').innerHTML = html;
+  });
 
   updateButtons();
-});
-
-function isMyTurn() {
-  return socket.id === currentPlayerId;
-}
-
-socket.on('turnUpdate', (data) => {
-  currentPlayerId = data.currentPlayer;
-
-  if (data.currentPlayer === socket.id) {
-    document.getElementById('turn').innerText = "Your Turn!";
-  } else {
-    document.getElementById('turn').innerText = "Waiting...";
-  }
-});
-socket.on('playerInfo', (info) => {
-  console.log('playerInfo received:', info);
-  playerNumber = info.playerNumber;
-  updatePlayerInfo();
-});
-
-socket.on('scoreboard', (scores) => {
-  console.log('scoreboard received:', scores); // 👈 ADD THIS
-  const scoreboardDiv = document.getElementById('scoreboard');
-  scoreboard = scores;
-  updateScoreboard();
-});
-
-
-
-updateButtons();
-updatePrizeCount();
-updateLevelDisplay();
-updateTimerDisplay(0);
-drawGrid();
-  </script>
+  updatePrizeCount();
+  updateLevelDisplay();
+  updateTimerDisplay(0);
+  drawGrid();
+</script>
 </body>
 </html>
