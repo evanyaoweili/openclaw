@@ -112,7 +112,7 @@
     let level = 1;
     let playerNumber = null;
     let scoreboard = [];
-    let currentPlayerId = null;
+    let currentPlayerId = null;    
 
     socket.on('prizes', (newPrizes) => {
       prizes = newPrizes;
@@ -281,16 +281,16 @@ socket.on('result', (msg) => {
 function isMyTurn() {
   return socket.id === currentPlayerId;
 }
+
 socket.on('turnUpdate', (data) => {
-    currentPlayerId = data.currentPlayer;
+  currentPlayerId = data.currentPlayer;
 
-    if (data.currentPlayer === socket.id) {
-      document.getElementById('turn').innerText = "Your Turn!";
-    } else {
-      document.getElementById('turn').innerText = "Waiting...";
-    }
-  });
-
+  if (data.currentPlayer === socket.id) {
+    document.getElementById('turn').innerText = "Your Turn!";
+  } else {
+    document.getElementById('turn').innerText = "Waiting...";
+  }
+});
 socket.on('playerInfo', (info) => {
   console.log('playerInfo received:', info);
   playerNumber = info.playerNumber;
@@ -299,6 +299,7 @@ socket.on('playerInfo', (info) => {
 
 socket.on('scoreboard', (scores) => {
   console.log('scoreboard received:', scores); // 👈 ADD THIS
+  const scoreboardDiv = document.getElementById('scoreboard');
   scoreboard = scores;
   updateScoreboard();
 });
