@@ -88,14 +88,7 @@ function generatePrizes(prizeCount) {
 }
 
 io.on('connection', (socket) => {
-   
-
-    console.log("Player joined:", socket.id);
-    playerOrder.push(socket.id);
-    
-    io.emit('turnUpdate', {
-      currentPlayer: playerOrder[currentTurnIndex]
-    });
+  console.log("Player joined:", socket.id);
 
   players[socket.id] = {
     socketId: socket.id,
@@ -104,8 +97,20 @@ io.on('connection', (socket) => {
     misses: 0
   };
 
+  playerOrder.push(socket.id);
+
+  if (playerOrder.length === 1) {
+    currentTurnIndex = 0;
+  }
+
+  console.log("Initial turn:", playerOrder[currentTurnIndex]);
+
   socket.emit('playerInfo', {
     playerNumber: players[socket.id].playerNumber
+  });
+
+  io.emit('turnUpdate', {
+    currentPlayer: playerOrder[currentTurnIndex]
   });
 
   sendGameState();
@@ -120,19 +125,17 @@ io.on('connection', (socket) => {
     gameState.timeLeft = settings.timeLimit;
     gameState.gameActive = true;
 
-    // start turn system when game starts
-    if (playerOrder.length > 0) {
-      currentTurnIndex = 0;
-
-      io.emit('turnUpdate', {
-        currentPlayer: playerOrder[currentTurnIndex]
-      });
-
-      console.log("Game started - first turn:", playerOrder[currentTurnIndex]);
-    }
     generatePrizes(settings.prizeCount);
 
     clearInterval(gameState.timer);
+
+    if (playerOrder.length > 0) {
+      currentTurnIndex = 0;
+      io.emit('turnUpdate', {
+        currentPlayer: playerOrder[currentTurnIndex]
+      });
+      console.log("Game started - first turn:", playerOrder[currentTurnIndex]);
+    }
 
     sendGameState();
     io.emit('result', '');
@@ -155,9 +158,8 @@ io.on('connection', (socket) => {
       expected: playerOrder[currentTurnIndex],
       gameActive: gameState.gameActive
     });
-    if (socket.id !== playerOrder[currentTurnIndex]) {
-    return; // ❌ Not your turn
-    }  
+
+    if (socket.id !== playerOrder[currentTurnIndex]) return;
     if (!gameState.gameActive) return;
 
     if (direction === 'left' && gameState.clawX > 0) gameState.clawX--;
@@ -169,62 +171,96 @@ io.on('connection', (socket) => {
   });
 
   socket.on('drop', () => {
-  if (socket.id !== playerOrder[currentTurnIndex]) {
-    return;
-  }
+    if (socket.id !== playerOrder[currentTurnIndex]) return;
+    if (!gameState.gameActive) return;
 
-  if (!gameState.gameActive) return;
+    let player = players[socket.id];
+    if (!player) return;
 
-  let player = players[socket.id];
-  if (!player) return;
+    const hitIndex = gameState.prizes.findIndex(
+      (p) => p.x === gameState.clawX && p.y === gameState.clawY
+    );
 
-  const hitIndex = gameState.prizes.findIndex(
-    (p) => p.x === gameState.clawX && p.y === gameState.clawY
-  );
+    if (hitIndex !== -1) {
+      const settings = getLevelSettings(gameState.level);
+      const success = Math.random() < settings.grabChance;
 
-  if (hitIndex !== -1) {
-    const settings = getLevelSettings(gameState.level);
-    const success = Math.random() < settings.grabChance;
+      if (success) {
+        gameState.prizes.splice(hitIndex, 1);
+        gameState.collected++;
 
-    if (success) {
-      gameState.prizes.splice(hitIndex, 1);
-      gameState.collected++;
+        gameState.clawX = 0;
+        gameState.clawY = 0;
 
-      gameState.clawX = 0;
-      gameState.clawY = 0;
+        io.emit('position', { x: gameState.clawX, y: gameState.clawY });
+        io.emit('prizes', gameState.prizes);
 
-      io.emit('position', { x: gameState.clawX, y: gameState.clawY });
-      io.emit('prizes', gameState.prizes);
+        if (gameState.prizes.length === 0) {
+          gameState.gameActive = false;
+          clearInterval(gameState.timer);
 
-      if (gameState.prizes.length === 0) {
-        gameState.gameActive = false;
-        clearInterval(gameState.timer);
+          player.wins++;
+          sendScores();
 
-        player.wins++;
-        sendScores();
-
-        if (gameState.level < 3) {
-          gameState.level++;
-          io.emit('level', gameState.level);
-          io.emit('result', `Player ${player.playerNumber} completed the level!`);
+          if (gameState.level < 3) {
+            gameState.level++;
+            io.emit('level', gameState.level);
+            io.emit('result', `Player ${player.playerNumber} completed the level!`);
+          } else {
+            io.emit('result', `Player ${player.playerNumber} beat the game!`);
+          }
         } else {
-          io.emit('result', `Player ${player.playerNumber} beat the game!`);
+          io.emit('result', `Player ${player.playerNumber} collected a prize!`);
         }
       } else {
-        io.emit('result', `Player ${player.playerNumber} collected a prize!`);
+        player.misses++;
+        sendScores();
+        io.emit('result', `Player ${player.playerNumber} almost got it!`);
       }
     } else {
       player.misses++;
       sendScores();
-      io.emit('result', `Player ${player.playerNumber} almost got it!`);
+      io.emit('result', `Player ${player.playerNumber} missed!`);
     }
-  } else {
-    player.misses++;
-    sendScores();
-    io.emit('result', `Player ${player.playerNumber} missed!`);
-  }
 
-  nextTurn();
+    nextTurn();
+  });
+
+  socket.on('restart', () => {
+    gameState.level = 1;
+    gameState.gameActive = false;
+    gameState.prizes = [];
+    gameState.clawX = 0;
+    gameState.clawY = 0;
+    gameState.collected = 0;
+    gameState.timeLeft = 30;
+
+    clearInterval(gameState.timer);
+
+    Object.values(players).forEach((player) => {
+      player.wins = 0;
+      player.misses = 0;
+    });
+
+    sendGameState();
+    sendScores();
+    io.emit('result', 'Game reset!');
+  });
+
+  socket.on('disconnect', () => {
+    playerOrder = playerOrder.filter(id => id !== socket.id);
+    delete players[socket.id];
+
+    if (currentTurnIndex >= playerOrder.length) {
+      currentTurnIndex = 0;
+    }
+
+    io.emit('turnUpdate', {
+      currentPlayer: playerOrder[currentTurnIndex]
+    });
+
+    sendScores();
+  });
 });
 
 let turnTimer = null;
