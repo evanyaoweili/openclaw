@@ -276,22 +276,6 @@ function nextTurn() {
     io.emit('result', 'Game reset!');
   });
 
- io.on('connection', (socket) => {
-  console.log("Player joined:", socket.id);
-
-  players[socket.id] = {
-    socketId: socket.id,
-    playerNumber: getPlayerNumber(),
-    wins: 0,
-    misses: 0
-  };
-  if (playerOrder.length === 1) {
-    currentTurnIndex = 0;
-
-    io.emit('turnUpdate', {
-      currentPlayer: playerOrder[currentTurnIndex]
-    });
-
   console.log("Initial turn:", playerOrder[currentTurnIndex]);
 }
   playerOrder.push(socket.id);
