@@ -277,7 +277,6 @@ function nextTurn() {
   });
 
   console.log("Initial turn:", playerOrder[currentTurnIndex]);
-}
   playerOrder.push(socket.id);
 
   socket.emit('playerInfo', {
