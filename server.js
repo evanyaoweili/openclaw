@@ -1,4 +1,5 @@
-let players = [];
+let players = {};
+let playerOrder = [];
 let currentTurnIndex = 0;
 
 const express = require('express');
@@ -87,14 +88,14 @@ function generatePrizes(prizeCount) {
 }
 
 io.on('connection', (socket) => {
-    players.push(socket.id);
+   
 
     console.log("Player joined:", socket.id);
 
-    socket.emit('playerNumber', players.length);
+    socket.emit('playerNumber', playerOrder.length);
 
     io.emit('turnUpdate', {
-      currentPlayer: players[currentTurnIndex]
+      currentPlayer: playerOrder[currentTurnIndex]
     });
 
   players[socket.id] = {
@@ -140,7 +141,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('move', (direction) => {
-      if (socket.id !== players[currentTurnIndex]) {
+      if (socket.id !== playerOrder[currentTurnIndex]) {
       return; // ❌ Not your turn
     }  
     if (!gameState.gameActive) return;
@@ -154,72 +155,73 @@ io.on('connection', (socket) => {
   });
 
   socket.on('drop', () => {
-  if (socket.id !== players[currentTurnIndex]) {
-    return; // ❌ Not your turn
+  if (socket.id !== playerOrder[currentTurnIndex]) {
+    return;
   }
 
-      if (!gameState.gameActive) return;
+  if (!gameState.gameActive) return;
 
-    const player = players[socket.id];
-    if (!player) return;
+  let player = players[socket.id];
+  if (!player) return;
 
-    const hitIndex = gameState.prizes.findIndex(
-      (p) => p.x === gameState.clawX && p.y === gameState.clawY
-    );
+  const hitIndex = gameState.prizes.findIndex(
+    (p) => p.x === gameState.clawX && p.y === gameState.clawY
+  );
 
-    if (hitIndex !== -1) {
-      const settings = getLevelSettings(gameState.level);
-      const success = Math.random() < settings.grabChance;
+  if (hitIndex !== -1) {
+    const settings = getLevelSettings(gameState.level);
+    const success = Math.random() < settings.grabChance;
 
-      if (success) {
-        gameState.prizes.splice(hitIndex, 1);
-        gameState.collected++;
+    if (success) {
+      gameState.prizes.splice(hitIndex, 1);
+      gameState.collected++;
 
-        gameState.clawX = 0;
-        gameState.clawY = 0;
+      gameState.clawX = 0;
+      gameState.clawY = 0;
 
-        io.emit('position', { x: gameState.clawX, y: gameState.clawY });
-        io.emit('prizes', gameState.prizes);
+      io.emit('position', { x: gameState.clawX, y: gameState.clawY });
+      io.emit('prizes', gameState.prizes);
 
-        if (gameState.prizes.length === 0) {
-          gameState.gameActive = false;
-          clearInterval(gameState.timer);
+      if (gameState.prizes.length === 0) {
+        gameState.gameActive = false;
+        clearInterval(gameState.timer);
 
-          player.wins++;
-          sendScores();
+        player.wins++;
+        sendScores();
 
-          if (gameState.level < 3) {
-            gameState.level++;
-            io.emit('level', gameState.level);
-            io.emit('result', `Player ${player.playerNumber} completed the level!`);
-          } else {
-            io.emit('result', `Player ${player.playerNumber} beat the game!`);
-          }
+        if (gameState.level < 3) {
+          gameState.level++;
+          io.emit('level', gameState.level);
+          io.emit('result', `Player ${player.playerNumber} completed the level!`);
         } else {
-          io.emit('result', `Player ${player.playerNumber} collected a prize!`);
+          io.emit('result', `Player ${player.playerNumber} beat the game!`);
         }
       } else {
-        player.misses++;
-        sendScores();
-        io.emit('result', `Player ${player.playerNumber} almost got it!`);
+        io.emit('result', `Player ${player.playerNumber} collected a prize!`);
       }
     } else {
       player.misses++;
       sendScores();
-      io.emit('result', `Player ${player.playerNumber} missed!`);
+      io.emit('result', `Player ${player.playerNumber} almost got it!`);
     }
-    nextTurn(); // move to next player
-  });
+  } else {
+    player.misses++;
+    sendScores();
+    io.emit('result', `Player ${player.playerNumber} missed!`);
+  }
+
+  nextTurn();
+});
 
 let turnTimer = null;
 
 function nextTurn() {
-  if (players.length === 0) return;
+  if (playerOrder.length === 0) return;
 
   // move to next player
-  currentTurnIndex = (currentTurnIndex + 1) % players.length;
+  currentTurnIndex = (currentTurnIndex + 1) % playerOrder.length;
 
-  const currentPlayer = players[currentTurnIndex];
+  const currentPlayer = playerOrder[currentTurnIndex];
 
   // tell everyone whose turn it is
   io.emit('turnUpdate', {
@@ -271,14 +273,15 @@ function nextTurn() {
   });
 
   socket.on('disconnect', () => {
-    players = players.filter(id => id !== socket.id);
+    playerOrder = playerOrder.filter(id => id !== socket.id);
+    delete players[socket.id];
 
-    if (currentTurnIndex >= players.length) {
+    if (currentTurnIndex >= playerOrder.length) {
       currentTurnIndex = 0;
     }
 
     io.emit('turnUpdate', {
-      currentPlayer: players[currentTurnIndex]
+      currentPlayer: playerOrder[currentTurnIndex]
     });
   });
 });

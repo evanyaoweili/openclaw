@@ -112,6 +112,7 @@
     let level = 1;
     let playerNumber = null;
     let scoreboard = [];
+    let currentPlayerId = null;
 
     socket.on('prizes', (newPrizes) => {
       prizes = newPrizes;
@@ -209,12 +210,17 @@ function updateScoreboard() {
   }
 
   scoreboardEl.innerHTML = scoreboard
-    .map(
-      (player) =>
+      .filter(player =>
+        player &&
+        player.playerNumber !== undefined &&
+        player.wins !== undefined &&
+        player.misses !== undefined
+      )
+      .map(player =>
         `Player ${player.playerNumber}: Wins ${player.wins} | Misses ${player.misses}`
-    )
-    .join('<br>');
-}
+      )
+      .join('<br>');
+  }
   document.addEventListener('keydown', (event) => {
       if (!gameActive) return;
 
@@ -272,19 +278,18 @@ socket.on('result', (msg) => {
   updateButtons();
 });
 
-function isMyTurn(currentPlayer) {
-  return socket.id === currentPlayer;
+function isMyTurn() {
+  return socket.id === currentPlayerId;
 }
-
 socket.on('turnUpdate', (data) => {
-  const myId = socket.id;
+    currentPlayerId = data.currentPlayer;
 
-  if (data.currentPlayer === myId) {
-    document.getElementById('turn').innerText = "Your Turn!";
-  } else {
-    document.getElementById('turn').innerText = "Waiting...";
-  }
-});
+    if (data.currentPlayer === socket.id) {
+      document.getElementById('turn').innerText = "Your Turn!";
+    } else {
+      document.getElementById('turn').innerText = "Waiting...";
+    }
+  });
 
 socket.on('playerInfo', (info) => {
   console.log('playerInfo received:', info);
