@@ -195,12 +195,13 @@
     }
   }
 
-  function startGame() {
-    gameActive = true;
-    updateButtons();
-    updateTimerDisplay(30);
-    socket.emit('start');
-  }
+function startGame() {
+  console.log("START button clicked");
+  gameActive = true;
+  updateButtons();
+  updateTimerDisplay(30);
+  socket.emit('start');
+}
 
   function restartGame() {
     socket.emit('restart');

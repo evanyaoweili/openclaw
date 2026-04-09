@@ -117,6 +117,8 @@ io.on('connection', (socket) => {
   sendScores();
 
   socket.on('start', () => {
+    console.log("START received from:", socket.id);
+
     const settings = getLevelSettings(gameState.level);
 
     gameState.clawX = 0;
@@ -124,6 +126,8 @@ io.on('connection', (socket) => {
     gameState.collected = 0;
     gameState.timeLeft = settings.timeLimit;
     gameState.gameActive = true;
+
+    console.log("gameActive is now:", gameState.gameActive);
 
     generatePrizes(settings.prizeCount);
 
