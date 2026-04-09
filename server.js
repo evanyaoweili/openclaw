@@ -96,8 +96,9 @@ io.on('connection', (socket) => {
     wins: 0,
     misses: 0
   };
-
-  playerOrder.push(socket.id);
+// remove any existing entry with same socket (safety)
+  playerOrder = playerOrder.filter(id => id !== socket.id);
+    playerOrder.push(socket.id);
 
   if (playerOrder.length === 1) {
     currentTurnIndex = 0;
@@ -117,6 +118,9 @@ io.on('connection', (socket) => {
   sendScores();
 
   socket.on('start', () => {
+    if (turnTimer) {
+      clearTimeout(turnTimer);
+    }
   playerOrder = playerOrder.filter(id => players[id]);
 
   const settings = getLevelSettings(gameState.level);

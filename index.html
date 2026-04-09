@@ -196,7 +196,10 @@
   }
 
 function startGame() {
-  console.log("START button clicked");
+  if (gameActive) return; // 🚨 prevent double start
+
+  console.log("START clicked");
+
   gameActive = true;
   updateButtons();
   updateTimerDisplay(30);
