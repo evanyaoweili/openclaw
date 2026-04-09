@@ -117,45 +117,42 @@ io.on('connection', (socket) => {
   sendScores();
 
   socket.on('start', () => {
-    console.log("START received from:", socket.id);
+  playerOrder = playerOrder.filter(id => players[id]);
 
-    const settings = getLevelSettings(gameState.level);
+  const settings = getLevelSettings(gameState.level);
 
-    gameState.clawX = 0;
-    gameState.clawY = 0;
-    gameState.collected = 0;
-    gameState.timeLeft = settings.timeLimit;
-    gameState.gameActive = true;
+  gameState.clawX = 0;
+  gameState.clawY = 0;
+  gameState.collected = 0;
+  gameState.timeLeft = settings.timeLimit;
+  gameState.gameActive = true;
 
-    console.log("gameActive is now:", gameState.gameActive);
+  generatePrizes(settings.prizeCount);
 
-    generatePrizes(settings.prizeCount);
+  clearInterval(gameState.timer);
 
-    clearInterval(gameState.timer);
+  if (playerOrder.length > 0) {
+    currentTurnIndex = 0;
+    io.emit('turnUpdate', {
+      currentPlayer: playerOrder[currentTurnIndex]
+    });
+    console.log("Game started - first turn:", playerOrder[currentTurnIndex]);
+  }
 
-    if (playerOrder.length > 0) {
-      currentTurnIndex = 0;
-      io.emit('turnUpdate', {
-        currentPlayer: playerOrder[currentTurnIndex]
-      });
-      console.log("Game started - first turn:", playerOrder[currentTurnIndex]);
+  sendGameState();
+  io.emit('result', '');
+
+  gameState.timer = setInterval(() => {
+    gameState.timeLeft--;
+    io.emit('timer', gameState.timeLeft);
+
+    if (gameState.timeLeft <= 0) {
+      clearInterval(gameState.timer);
+      gameState.gameActive = false;
+      io.emit('result', 'Game Over!');
     }
-
-    sendGameState();
-    io.emit('result', '');
-
-    gameState.timer = setInterval(() => {
-      gameState.timeLeft--;
-      io.emit('timer', gameState.timeLeft);
-
-      if (gameState.timeLeft <= 0) {
-        clearInterval(gameState.timer);
-        gameState.gameActive = false;
-        io.emit('result', 'Game Over!');
-      }
-    }, 1000);
-  });
-
+  }, 1000);
+});
   socket.on('move', (direction) => {
     console.log("MOVE CHECK:", {
       socketId: socket.id,
@@ -252,8 +249,12 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    console.log("Player disconnected:", socket.id);
+
     playerOrder = playerOrder.filter(id => id !== socket.id);
     delete players[socket.id];
+
+    console.log("Remaining playerOrder:", playerOrder);
 
     if (currentTurnIndex >= playerOrder.length) {
       currentTurnIndex = 0;
@@ -272,30 +273,47 @@ let turnTimer = null;
 function nextTurn() {
   if (playerOrder.length === 0) return;
 
-  // move to next player
+  // if only one player, keep turn on same player
+  if (playerOrder.length === 1) {
+    const currentPlayer = playerOrder[0];
+
+    io.emit('turnUpdate', {
+      currentPlayer: currentPlayer
+    });
+
+    console.log("Single player turn stays on:", currentPlayer);
+
+    if (turnTimer) {
+      clearTimeout(turnTimer);
+    }
+
+    turnTimer = setTimeout(() => {
+      console.log("Single player turn timed out");
+      nextTurn();
+    }, 20000);
+
+    return;
+  }
+
   currentTurnIndex = (currentTurnIndex + 1) % playerOrder.length;
 
   const currentPlayer = playerOrder[currentTurnIndex];
 
-  // tell everyone whose turn it is
   io.emit('turnUpdate', {
     currentPlayer: currentPlayer
   });
 
   console.log("Current turn:", currentPlayer);
 
-  // 🧠 CLEAR previous timer (IMPORTANT)
   if (turnTimer) {
     clearTimeout(turnTimer);
   }
 
-  // ⏱️ start new timer
   turnTimer = setTimeout(() => {
     console.log("Turn timed out");
     nextTurn();
-  }, 20000); // 20 seconds
+  }, 20000);
 }
-
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
