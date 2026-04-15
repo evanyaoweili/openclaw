@@ -13,29 +13,31 @@ const gridSize = 5;
 let claw = { x: 2, y: 0 };
 let prizes = [];
 let clawBusy = false;
+let carriedPrize = null;
 
 function randomPrize() {
-  let prize;
-  do {
-    prize = {
-      x: Math.floor(Math.random() * gridSize),
-      y: gridSize - 1
-    };
-  } while (prize.x === claw.x && prize.y === claw.y);
-
-  return prize;
+  return {
+    x: Math.floor(Math.random() * gridSize),
+    y: gridSize - 1
+  };
 }
 
 function resetGame() {
   claw = { x: 2, y: 0 };
   prizes = [randomPrize()];
   clawBusy = false;
+  carriedPrize = null;
 }
 
-function sendState() {
-  io.emit('position', claw);
-  io.emit('prizes', prizes);
-  io.emit('busy', clawBusy);
+function sendState(socketOrIo = io) {
+  socketOrIo.emit('position', claw);
+  socketOrIo.emit('prizes', prizes);
+  socketOrIo.emit('busy', clawBusy);
+  socketOrIo.emit('carriedPrize', carriedPrize);
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 resetGame();
@@ -43,9 +45,7 @@ resetGame();
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
 
-  socket.emit('position', claw);
-  socket.emit('prizes', prizes);
-  socket.emit('busy', clawBusy);
+  sendState(socket);
   socket.emit('result', 'Welcome to OpenClaw');
 
   socket.on('move', (direction) => {
@@ -60,43 +60,66 @@ io.on('connection', (socket) => {
     io.emit('position', claw);
   });
 
-  socket.on('drop', () => {
+  socket.on('drop', async () => {
     if (clawBusy) return;
 
     clawBusy = true;
+    carriedPrize = null;
     io.emit('busy', clawBusy);
+    io.emit('carriedPrize', carriedPrize);
     io.emit('result', 'Claw dropping...');
 
-    // Drop to bottom row
-    claw.y = gridSize - 1;
-    io.emit('position', claw);
-
     const hitIndex = prizes.findIndex(
-      (p) => p.x === claw.x && p.y === claw.y
+      (p) => p.x === claw.x && p.y === gridSize - 1
     );
 
-    setTimeout(() => {
-      if (hitIndex !== -1) {
-        prizes.splice(hitIndex, 1);
-        io.emit('prizes', prizes);
-        io.emit('result', 'Prize grabbed!');
-      } else {
-        io.emit('result', 'Missed!');
-      }
+    // Go down one row at a time
+    while (claw.y < gridSize - 1) {
+      claw.y++;
+      io.emit('position', claw);
+      await wait(300);
+    }
 
-      // Return claw to top
-      claw.y = 0;
+    // Check for grab at bottom
+    if (hitIndex !== -1) {
+      carriedPrize = { x: claw.x, y: claw.y };
+      prizes.splice(hitIndex, 1);
+      io.emit('prizes', prizes);
+      io.emit('carriedPrize', carriedPrize);
+      io.emit('result', 'Prize grabbed!');
+    } else {
+      io.emit('result', 'Missed!');
+    }
+
+    await wait(400);
+
+    // Go back up one row at a time
+    while (claw.y > 0) {
+      claw.y--;
       io.emit('position', claw);
 
-      // Create a new prize if all prizes were collected
+      if (carriedPrize) {
+        carriedPrize.y = claw.y;
+        io.emit('carriedPrize', carriedPrize);
+      }
+
+      await wait(300);
+    }
+
+    // Drop collected prize at top
+    if (carriedPrize) {
+      io.emit('result', 'Prize delivered!');
+      carriedPrize = null;
+      io.emit('carriedPrize', carriedPrize);
+
       if (prizes.length === 0) {
         prizes = [randomPrize()];
         io.emit('prizes', prizes);
       }
+    }
 
-      clawBusy = false;
-      io.emit('busy', clawBusy);
-    }, 1000);
+    clawBusy = false;
+    io.emit('busy', clawBusy);
   });
 
   socket.on('reset', () => {

@@ -40,6 +40,11 @@
       border: 2px solid goldenrod;
     }
 
+    .carried-cell {
+      background: lightgreen;
+      border: 2px solid green;
+    }
+
     button {
       margin: 5px;
       padding: 10px 15px;
@@ -76,6 +81,7 @@
     let claw = { x: 2, y: 0 };
     let prizes = [];
     let clawBusy = false;
+    let carriedPrize = null;
 
     function drawGrid() {
       const grid = document.getElementById('grid');
@@ -87,10 +93,15 @@
           cell.className = 'cell';
 
           const hasPrize = prizes.some(p => p.x === x && p.y === y);
+          const hasCarriedPrize =
+            carriedPrize && carriedPrize.x === x && carriedPrize.y === y;
 
           if (x === claw.x && y === claw.y) {
             cell.innerText = '🕹️';
             cell.classList.add('claw-cell');
+          } else if (hasCarriedPrize) {
+            cell.innerText = '🎁';
+            cell.classList.add('carried-cell');
           } else if (hasPrize) {
             cell.innerText = '🎁';
             cell.classList.add('prize-cell');
@@ -154,6 +165,11 @@
     socket.on('busy', (isBusy) => {
       clawBusy = isBusy;
       updateButtons();
+    });
+
+    socket.on('carriedPrize', (prize) => {
+      carriedPrize = prize;
+      drawGrid();
     });
 
     socket.on('result', (msg) => {
