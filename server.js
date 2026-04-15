@@ -61,39 +61,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('drop', async () => {
-    if (clawBusy) return;
-
-    clawBusy = true;
-    carriedPrize = null;
-    io.emit('busy', clawBusy);
-    io.emit('carriedPrize', carriedPrize);
-    io.emit('result', 'Claw dropping...');
-
-    const hitIndex = prizes.findIndex(
-      (p) => p.x === claw.x && p.y === gridSize - 1
-    );
-
-    // Go down one row at a time
-    while (claw.y < gridSize - 1) {
-      claw.y++;
-      io.emit('position', claw);
-      await wait(300);
-    }
-
-    // Check for grab at bottom
-    if (hitIndex !== -1) {
-      carriedPrize = { x: claw.x, y: claw.y };
-      prizes.splice(hitIndex, 1);
-      io.emit('prizes', prizes);
-      io.emit('carriedPrize', carriedPrize);
-      io.emit('result', 'Prize grabbed!');
-    } else {
-      io.emit('result', 'Missed!');
-    }
-
-    await wait(400);
-
-    // Go back up one row at a time
     while (claw.y > 0) {
       claw.y--;
       io.emit('position', claw);
@@ -101,25 +68,29 @@ io.on('connection', (socket) => {
       if (carriedPrize) {
         carriedPrize.y = claw.y;
         io.emit('carriedPrize', carriedPrize);
+
+        // 👇 NEW: slip logic
+        if (!slippingPrize && claw.y === 2) {
+          const slipChance = 0.5; // 50% chance
+          const slipped = Math.random() < slipChance;
+
+          if (slipped) {
+            slippingPrize = true;
+
+            // drop prize back into machine
+            prizes.push({ x: claw.x, y: claw.y + 1 });
+            io.emit('prizes', prizes);
+
+            carriedPrize = null;
+            io.emit('carriedPrize', carriedPrize);
+
+            io.emit('result', '😮 Prize slipped out!');
+          }
+        }
       }
 
       await wait(300);
-    }
-
-    // Drop collected prize at top
-    if (carriedPrize) {
-      io.emit('result', 'Prize delivered!');
-      carriedPrize = null;
-      io.emit('carriedPrize', carriedPrize);
-
-      if (prizes.length === 0) {
-        prizes = [randomPrize()];
-        io.emit('prizes', prizes);
-      }
-    }
-
-    clawBusy = false;
-    io.emit('busy', clawBusy);
+    }  
   });
 
   socket.on('reset', () => {
