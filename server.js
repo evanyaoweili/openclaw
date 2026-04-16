@@ -60,8 +60,8 @@ io.on('connection', (socket) => {
     io.emit('position', claw);
   });
 
-  socket.on('drop', async () => {
-  console.log("DROP received on server"); // 👈 debug
+socket.on('drop', async () => {
+  console.log("DROP received on server");
 
   if (clawBusy) return;
 
@@ -76,14 +76,14 @@ io.on('connection', (socket) => {
     (p) => p.x === claw.x && p.y === gridSize - 1
   );
 
-  // 🔽 Go down
+  // Go down
   while (claw.y < gridSize - 1) {
     claw.y++;
     io.emit('position', claw);
     await wait(300);
   }
 
-  // 🎯 Grab check
+  // Try to grab
   if (hitIndex !== -1) {
     carriedPrize = { x: claw.x, y: claw.y };
     prizes.splice(hitIndex, 1);
@@ -97,7 +97,9 @@ io.on('connection', (socket) => {
 
   await wait(400);
 
-  // 🔼 Go up
+  let slippingPrize = false;
+
+  // Go back up
   while (claw.y > 0) {
     claw.y--;
     io.emit('position', claw);
@@ -105,12 +107,30 @@ io.on('connection', (socket) => {
     if (carriedPrize) {
       carriedPrize.y = claw.y;
       io.emit('carriedPrize', carriedPrize);
+
+      // Slip halfway up
+      if (!slippingPrize && claw.y === 2) {
+        const slipChance = 0.5;
+        const slipped = Math.random() < slipChance;
+
+        if (slipped) {
+          slippingPrize = true;
+
+          prizes.push({ x: claw.x, y: claw.y + 1 });
+          io.emit('prizes', prizes);
+
+          carriedPrize = null;
+          io.emit('carriedPrize', carriedPrize);
+
+          io.emit('result', '😮 Prize slipped out!');
+        }
+      }
     }
 
     await wait(300);
   }
 
-  // 🏆 Deliver
+  // Deliver if still holding prize
   if (carriedPrize) {
     io.emit('result', '🏆 Prize delivered!');
     carriedPrize = null;
@@ -125,7 +145,6 @@ io.on('connection', (socket) => {
   clawBusy = false;
   io.emit('busy', clawBusy);
 });
-
   socket.on('reset', () => {
     resetGame();
     sendState();
